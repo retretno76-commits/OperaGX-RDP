@@ -1,4 +1,4 @@
-name: Cloud PC + AnyDesk + Opera GX (Optimized Original Layout)
+name: Cloud PC + AnyDesk + Opera GX (Absolute Control Layout)
 
 on:
   workflow_dispatch:
@@ -59,12 +59,12 @@ jobs:
 
       - name: Clean and Hide Active Infrastructure Windows
         run: |
-          Write-Host "Minimizing active console window using internal API..."
-          # Minimizes ONLY the runner console window directly to prevent virtual memory alerts
+          Write-Host "Masking operational console background natively..."
+          # SW_HIDE (0) removes the host window structure entirely from sight to prevent manual interactions
           $typeDefinition = '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();'
           $win32 = Add-Type -MemberDefinition $typeDefinition -Name "Win32Utils" -Namespace "Win32" -PassThru
           $handle = $win32::GetConsoleWindow()
-          if ($handle -ne [IntPtr]::Zero) { $win32::ShowWindow($handle, 6) | Out-Null }
+          if ($handle -ne [IntPtr]::Zero) { $win32::ShowWindow($handle, 0) | Out-Null }
 
       - name: Optimize Resolution for Mobile Display
         run: |
@@ -78,26 +78,35 @@ jobs:
           $installer = "$env:TEMP\OperaGXSetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           
-          Write-Host "Installing Opera GX with custom switches..."
-          # --no-first-run and silent flags suppress the intro welcome slide tabs completely
-          Start-Process -FilePath $installer -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0", "--desktopshortcut=1", "--no-first-run" -Wait
+          Write-Host "Installing Opera GX with absolute silent defaults..."
+          # Passing explicit configuration preferences to the underlying installer package
+          Start-Process -FilePath $installer -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0", "--desktopshortcut=0", "--no-first-run" -Wait
           Start-Sleep -Seconds 5
           Remove-Item $installer -ErrorAction SilentlyContinue
 
       - name: Create Specialized Target Link for Rewards Launch
         run: |
-          Write-Host "Building desktop launcher linking directly to partnership profile..."
+          Write-Host "Wiping default setup shortcuts to prevent duplicate icons..."
           $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          $userDesktop = "$env:USERPROFILE\Desktop"
           
+          # Clean up any generic icons drop by the installer inside user space or public space
+          Get-ChildItem -Path $publicDesktop, $userDesktop -Filter "*Opera*.lnk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
+          Write-Host "Locating operational browser binary execution path..."
+          # Explicit check loop prioritizing the global directory target path over local user targets
           $operaExe = "C:\Program Files\Opera GX\opera.exe"
           if (-not (Test-Path $operaExe)) { $operaExe = "C:\Program Files (x86)\Opera GX\opera.exe" }
+          if (-not (Test-Path $operaExe)) { $operaExe = "$env:LOCALAPPDATA\Programs\Opera GX\opera.exe" }
           
+          Write-Host "Building dedicated desktop launcher link..."
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX.lnk")
           $Shortcut.TargetPath = $operaExe
-          # Opens directly to the target partnership link you used in your working build
-          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken"
+          # Pass explicit parameters to launch directly to your partner page
+          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken --no-first-run"
           $Shortcut.Save()
+          Write-Host "Shortcut generated successfully."
 
       - name: Fetch and Display AnyDesk Connection Address
         run: |
