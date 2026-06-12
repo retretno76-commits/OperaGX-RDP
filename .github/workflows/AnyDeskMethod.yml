@@ -40,6 +40,7 @@ jobs:
           $installDir = "C:\Program Files (x86)\AnyDesk"
           if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installDir -Force | Out-Null }
 
+          # Silent install flags automatically handle background service registration without interactive blocking
           Start-Process $dst -ArgumentList "--install `"$installDir`"", "--silent", "--start-with-win" -Wait
           Start-Sleep -Seconds 5
           Remove-Item $dst -ErrorAction SilentlyContinue
@@ -49,19 +50,16 @@ jobs:
           $ad = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
           if (-not (Test-Path $ad)) { $ad = "C:\Program Files\AnyDesk\AnyDesk.exe" }
           
-          # Force register the system service layer to bind security permissions properly
-          Start-Process -FilePath $ad -ArgumentList "--register-service" -Wait
-          Start-Sleep -Seconds 2
-          
-          # Set password access cleanly
+          # Sets the password securely via the native command line interface
           cmd.exe /c "echo ${{ env.ANYDESK_PASS }} | `"$ad`" --set-password"
           
-          # Inject full input accessibility rights to enable mobile touch scrolling and override guest mode locks
+          # Inject input accessibility privileges to unlock full multi-touch gesture mapping
           New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableUIADesktopToggle" -PropertyType DWord -Value 1 -Force -ErrorAction SilentlyContinue
           
           $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
           Set-ItemProperty -Path $path -Name "TaskbarGlomLevel" -Value 0 -ErrorAction SilentlyContinue
           
+          # Safely cycles the service parameters in the background to apply configurations
           Start-Process -FilePath $ad -ArgumentList "--restart-service" -Wait
           Start-Sleep -Seconds 5
 
