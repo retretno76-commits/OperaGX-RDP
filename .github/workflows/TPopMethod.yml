@@ -1,4 +1,4 @@
-name: Cloud PC + Web Browser Link + Opera GX (UltraVNC Fix)
+name: Cloud PC + Web Browser Link + Opera GX (Passwordless Fix)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 190
     env:
-      VNC_PASS: password
       RUNTIME_MINUTES: 180
 
     steps:
@@ -28,22 +27,19 @@ jobs:
       - name: Force Full HD Resolution
         run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
 
-      - name: Install and Configure UltraVNC Server
+      - name: Install and Configure UltraVNC Server (Auth Disabled)
         run: |
           # Install UltraVNC cleanly using Chocolatey
           choco install ultravnc -y --no-progress
           
-          # Target default UltraVNC installation paths
           $uvncDir = "C:\Program Files\uvnc bvba\UltraVNC"
           $iniPath = "$uvncDir\ultravnc.ini"
           
-          # Create an ultra-compatible INI configuration file
-          # 'passwd=0x5D4B1A24B62A6DEB' is the pre-encrypted hex block for the word 'password'
+          # AuthRequired=0 completely turns off the password prompt barrier
           $iniContent = @"
           [Permissions]
           [UltraVNC]
-          passwd=0x5D4B1A24B62A6DEB
-          passwd2=0x5D4B1A24B62A6DEB
+          AuthRequired=0
           CheckServerPort=1
           PortNumber=5900
           HttpPortNumber=5800
@@ -60,18 +56,19 @@ jobs:
           Connection=1
           "@
           
-          # Force push configuration settings headlessly
+          # Write the configuration file
           Out-File -FilePath $iniPath -InputObject $iniContent -Encoding ascii -Force
           
-          # Register and force launch the application service
+          # Register and launch the service clean
           Start-Process "$uvncDir\winvnc.exe" -ArgumentList "-install" -Wait
           Start-Process "$uvncDir\winvnc.exe" -ArgumentList "-startservice" -Wait
           
-          Write-Host "UltraVNC Server successfully initialized."
+          Write-Host "UltraVNC Server successfully initialized in Open Auth Mode."
 
       - name: Download & Force Consumer Build of Opera GX
         run: |
-          Invoke-WebRequest -Uri "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx" -OutFile "$env:TEMP\OperaGXSetup.exe"
+          $Url = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx"
+          Invoke-WebRequest -Uri $Url -OutFile "$env:TEMP\OperaGXSetup.exe"
           Start-Process -FilePath "$env:TEMP\OperaGXSetup.exe" -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0" -Wait
 
       - name: Deploy Web Interface & Dynamic Gateway Engines
@@ -103,12 +100,13 @@ jobs:
           $RawLink = (Get-Content $LogFile -Raw) | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.loca\.lt' | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value -First 1
           
           if ($RawLink) {
-              $FinalUrl = $RawLink + "/vnc.html?autoconnect=true&password=" + "${{ env.VNC_PASS }}"
+              # Since auth is disabled, the direct URL layout drops straight to your desktop layout seamlessly
+              $FinalUrl = $RawLink + "/vnc.html?autoconnect=true"
               Write-Host "===================================================="
               Write-Host "      WEB-BROWSER CLOUD PC IS READY TO CONNECT      "
               Write-Host "===================================================="
               Write-Host " CLICK LINK: $FinalUrl"
-              Write-Host " PASSWORD  : ${{ env.VNC_PASS }}"
+              Write-Host " SECURITY  : Open Authentication Active (No Password)"
               Write-Host "===================================================="
           } else {
               Write-Error "CRITICAL: Dynamic gateway assignment timed out."
