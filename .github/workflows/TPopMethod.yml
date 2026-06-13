@@ -20,8 +20,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 370
     env:
-      RDP_USER: user
-      RDP_PASS: Pass1234
+      rdp_user: user
+      rdp_pass: Pass1234
 
     steps:
       - name: Wipe Unnecessary Pre-Installed GitHub Apps & Shortcuts
@@ -35,7 +35,7 @@ jobs:
           Set-DisplayResolution -Width 1920 -Height 1080 -Force
           "RUNTIME_MINUTES=${{ inputs.runtime_minutes }}" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Download & Force Consumer Build of Opera GX
+      - name: Download & Install Consumer Build of Opera GX
         run: |
           Invoke-WebRequest -Uri "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx" -OutFile "$env:TEMP\OperaGXSetup.exe"
           Start-Process -FilePath "$env:TEMP\OperaGXSetup.exe" -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0" -Wait
@@ -44,25 +44,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip --quiet
           python -m pip install pyautogui pynput pillow --quiet
-
-      - name: Run Opera GX Custom Automation Sequence
-        run: |
-          Start-Process "C:\Program Files\Opera GX\launcher.exe"
-          Start-Sleep -Seconds 8
-          
-          python -c @"
-          import pyautogui
-          import time
-          
-          # Close the default welcome page tab (Ctrl + W)
-          pyautogui.hotkey('ctrl', 'w')
-          time.sleep(2)
-          
-          # Force launch the collab link setup
-          pyautogui.hotkey('ctrl', 't')
-          pyautogui.write('https://www.opera.com/gx/is-forsaken')
-          pyautogui.press('enter')
-          "@
 
       - name: Install RustDesk Host Engine
         run: |
@@ -77,8 +58,8 @@ jobs:
 
       - name: Set Custom RustDesk Static Password
         run: |
-          & "C:\Program Files\RustDesk\rustdesk.exe" --password "${{ env.RDP_PASS }}"
-          Write-Host "RustDesk permanent security key set to: ${{ env.RDP_PASS }}"
+          & "C:\Program Files\RustDesk\rustdesk.exe" --password "$env:rdp_pass"
+          Write-Host "RustDesk permanent security key set to: $env:rdp_pass"
 
       - name: Open Firewall Rules for RustDesk Port Mapping
         run: |
@@ -113,6 +94,41 @@ jobs:
               Write-Host "GitHub Agent Host background console window hidden successfully."
           }
 
+      - name: Run Opera GX Custom Automation Sequence
+        run: |
+          $PathsToCheck = @(
+              "${env:ProgramFiles}\Opera GX\launcher.exe",
+              "${env:ProgramFiles(x86)}\Opera GX\launcher.exe",
+              "${env:LOCALAPPDATA}\Programs\Opera GX\launcher.exe"
+          )
+          
+          $OperaPath = $null
+          foreach ($Path in $PathsToCheck) {
+              if (Test-Path $Path) { $OperaPath = $Path; break }
+          }
+          
+          if ($OperaPath) {
+              Write-Host "Found Opera GX at: $OperaPath"
+              Start-Process $OperaPath
+              Start-Sleep -Seconds 8
+              
+              python -c @"
+          import pyautogui
+          import time
+          
+          # Close the default welcome page tab (Ctrl + W)
+          pyautogui.hotkey('ctrl', 'w')
+          time.sleep(2)
+          
+          # Force launch the collab link setup
+          pyautogui.hotkey('ctrl', 't')
+          pyautogui.write('https://www.opera.com/gx/is-forsaken')
+          pyautogui.press('enter')
+          "@
+          } else {
+              Write-Warning "Could not dynamically trace the Opera GX binary launcher path."
+          }
+
       - name: Capture Live Credentials Layout & Upload to Gofile
         run: |
           Start-Sleep -Seconds 5
@@ -142,7 +158,7 @@ jobs:
 
       - name: Keep Alive Execution Loop
         run: |
-          $mins = [int]"${{ env.RUNTIME_MINUTES }}"
+          $mins = [int]$env:RUNTIME_MINUTES
           $end = (Get-Date).AddMinutes($mins)
           while ((Get-Date) -lt $end) {
             Write-Host "Cloud PC Heartbeat | Ends at: $($end.ToString('HH:mm:ss')) | View Screen at: $env:SCREENSHOT_URL"
