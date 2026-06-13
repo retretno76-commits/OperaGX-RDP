@@ -1,4 +1,4 @@
-name: Cloud PC via Release-Hosted AweSun Deployment
+name: Cloud PC via Release-Hosted AweSun Deployment (Zip Fix)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 190
     env:
-      # Integrated your direct release file download pathway cleanly
       RELEASE_URL: "https://github.com/tusharpop553-afk/OperaGX-RDP/releases/download/v1.0.0/AweSun.zip"
 
     steps:
@@ -35,47 +34,40 @@ jobs:
 
       - name: Fetch Large Archive from Releases and Extract
         run: |
-          Write-Host "Downloading large application payload from secure release tier..."
+          Write-Host "Downloading application payload..."
           Invoke-WebRequest -Uri "${{ env.RELEASE_URL }}" -OutFile "awesun.zip"
           
-          Write-Host "Creating target system directories..."
-          New-Item -ItemType Directory -Path "C:\Program Files (x86)\AweSun" -Force
-          
-          Write-Host "Extracting zip package archive..."
-          Expand-Archive -Path "awesun.zip" -DestinationPath "C:\Program Files (x86)\AweSun" -Force
-          
-          # Automatically flattens the system structure if the zip contains a root folder name matching 'AweSun' or 'awesun'
-          if (Test-Path "C:\Program Files (x86)\AweSun\AweSun") {
-              Move-Item "C:\Program Files (x86)\AweSun\AweSun\*" "C:\Program Files (x86)\AweSun\" -Force
-          } elseif (Test-Path "C:\Program Files (x86)\AweSun\awesun") {
-              Move-Item "C:\Program Files (x86)\AweSun\awesun\*" "C:\Program Files (x86)\AweSun\" -Force
-          }
+          Write-Host "Extracting zip package directly to Program Files..."
+          # Since your zip contains the "AweSun" folder, extracting to "Program Files (x86)" 
+          # puts the files exactly into "C:\Program Files (x86)\AweSun\"
+          Expand-Archive -Path "awesun.zip" -DestinationPath "C:\Program Files (x86)" -Force
 
       - name: Initialize Main Background Execution Engines
         run: |
           $AweSunExe = "C:\Program Files (x86)\AweSun\AweSun.exe"
           $ServiceExe = "C:\Program Files (x86)\AweSun\AweSunService.exe"
           
+          # Verification check to make sure it landed perfectly
           if (-not (Test-Path $AweSunExe)) {
-              Write-Error "CRITICAL: AweSun.exe not found at target location. Check your zip file configuration."
+              Write-Error "CRITICAL: AweSun.exe was still not found at $AweSunExe."
+              Write-Host "Listing what actually got extracted for debugging:"
+              Get-ChildItem -Path "C:\Program Files (x86)" -Filter "*awesun*" -Recurse -ErrorAction SilentlyContinue
               exit 1
           }
           
-          Write-Host "Registering background engine dependencies..."
+          Write-Host "Registering background service..."
           Start-Process $ServiceExe -ArgumentList "-install" -Wait -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           
-          Write-Host "Launching main connection framework..."
-          # Start the core engine headless with silent execution parameters
+          Write-Host "Launching connection dashboard framework..."
           Start-Process $AweSunExe -ArgumentList "-s" -NoNewWindow
           Start-Sleep -Seconds 10
           
           Write-Host "===================================================="
           Write-Host "         AWESUN ENGINE DEPLOYMENT COMPLETE          "
           Write-Host "===================================================="
-          Write-Host " Large file download and deployment successful."
-          Write-Host " Open your local computer or phone's AweSun client"
-          Write-Host " to verify if this cloud runner pops up online."
+          Write-Host " Software extracted and initialized successfully."
+          Write-Host " Check your phone or local PC app to watch it connect!"
           Write-Host "===================================================="
 
       - name: Keep Alive Loop
