@@ -1,4 +1,4 @@
-name: RDP + Tailscale (Opera GX Test Run)
+name: RDP + Tailscale (Cleaned & Minimal)
 
 on:
   workflow_dispatch:
@@ -35,39 +35,34 @@ jobs:
           $targets = @("Unity Hub.lnk", "R 4.6.0.lnk", "Firefox.lnk", "Google Chrome.lnk", "Claim Rewards Here.lnk")
           foreach ($target in $targets) { Remove-Item "$publicDesktop\$target" -Force -ErrorAction SilentlyContinue }
 
-      - name: Dismiss Annoying Windows System Properties Popups
+      - name: Download & Force Forsaken Edition Build of Opera GX
         run: |
-          Write-Host "Killing background error popups..."
-          Stop-Process -Name "systempropertiesadvanced" -Force -ErrorAction SilentlyContinue
-          Stop-Process -Name "systempropertiescomputername" -Force -ErrorAction SilentlyContinue
-
-      - name: Fetch and Save Official Forsaken Installer to Desktop
-        run: |
-          Write-Host "Simulating official live session on the Opera GX Forsaken page..."
-          $landingUrl = "https://www.opera.com/gx/forsaken"
-          $userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          Write-Host "Fetching partner-authenticated Opera GX Forsaken Core..."
+          # Updated URL to include specific partner tags and sub-campaign identifiers for the Forsaken promotion
+          $url = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx&utm_campaign=forsaken&utm_id=forsaken_promo"
+          $installer = "$env:TEMP\OperaGXSetup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
           
-          # Initialize session connection
-          $webRequest = [System.Net.HttpWebRequest]::Create($landingUrl)
-          $webRequest.UserAgent = $userAgent
-          $webRequest.AllowAutoRedirect = $true
-          $response = $webRequest.GetResponse()
-          $finalUrl = $response.ResponseUri.AbsoluteUri
-          $response.Close()
-          
-          # Force download routing straight through the exclusive landing domain
-          $downloadUrl = "https://net.geo.opera.com/opera_gx/stable/windows?utm_source=inf&utm_medium=gx&utm_campaign=forsaken&http_referrer=$( [System.Uri]::EscapeDataString($finalUrl) )"
+          Start-Process -FilePath $installer -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0", "--desktopshortcut=1" -Wait
           
           $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
-          $installerPath = "$publicDesktop\OperaGXSetup.exe"
+          $userDesktop = "$env:USERPROFILE\Desktop"
           
-          Write-Host "Downloading target event installer directly to Desktop..."
-          $client = New-Object System.Net.WebClient
-          $client.Headers.Add("User-Agent", $userAgent)
-          $client.Headers.Add("Referer", $landingUrl)
-          $client.DownloadFile($downloadUrl, $installerPath)
+          if (Test-Path "$userDesktop\Opera GX.lnk") {
+              Move-Item -Path "$userDesktop\Opera GX.lnk" -Destination $publicDesktop -Force -ErrorAction SilentlyContinue
+          }
+
+          Write-Host "Configuring explicit launcher shortcut with forced promo link and sidebar flags..."
+          $operaExe = "$env:ProgramFiles\Opera GX\opera.exe"
+          if (-not (Test-Path $operaExe)) { $operaExe = "$env:ProgramFiles (x86)\Opera GX\opera.exe" }
           
-          Write-Host "Authentic Forsaken Event Installer downloaded successfully!"
+          $WshShell = New-Object -ComObject WScript.Shell
+          $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX Browser.lnk")
+          $Shortcut.TargetPath = $operaExe
+          $Shortcut.Arguments = "https://www.opera.com/gx/forsaken --no-first-run --enable-features=GXRewards,GXRewardsSidebarItem --with-feature:gx-rewards=1"
+          $Shortcut.Save()
+
+          Start-Process -FilePath "$publicDesktop\Opera GX Browser.lnk"
 
       - name: Parse Runtime Requirements
         run: |
