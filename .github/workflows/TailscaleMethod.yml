@@ -29,8 +29,15 @@ jobs:
       RDP_PASS: "Pass1234"
 
     steps:
-      - name: Force Taller Resolution for Mobile Display
-        run: Set-DisplayResolution -Width 1280 -Height 1024 -Force
+      - name: Force Hardware Portrait Display Resolution for Mobile
+        run: |
+          Write-Host "Injecting explicit vertical dimension constraints into RDP engine..."
+          $RdpPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"
+          New-ItemProperty -Path $RdpPath -Name "DefaultTargetWidth" -PropertyType DWord -Value 1080 -Force -ErrorAction SilentlyContinue
+          New-ItemProperty -Path $RdpPath -Name "DefaultTargetHeight" -PropertyType DWord -Value 1920 -Force -ErrorAction SilentlyContinue
+          
+          # Also set a fall-back display resolution via display layout subsystem
+          Set-DisplayResolution -Width 1080 -Height 1920 -Force -ErrorAction SilentlyContinue
 
       - name: Wipe Unnecessary Pre-Installed GitHub Apps & Shortcuts
         run: |
