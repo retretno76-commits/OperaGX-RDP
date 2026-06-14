@@ -1,4 +1,4 @@
-name: Cloud PC + AnyDesk + Opera GX (Ultimate Fix Restored)
+name: AnyDesk
 
 on:
   workflow_dispatch:
