@@ -31,6 +31,12 @@ jobs:
               if (Test-Path "$userDesktop\$target") { Remove-Item "$userDesktop\$target" -Force -ErrorAction SilentlyContinue }
           }
 
+      - name: Dismiss Annoying Windows System Properties Popups
+        run: |
+          Write-Host "Killing background error popups..."
+          Stop-Process -Name "systempropertiesadvanced" -Force -ErrorAction SilentlyContinue
+          Stop-Process -Name "systempropertiescomputername" -Force -ErrorAction SilentlyContinue
+
       - name: Download and Force Install AnyDesk
         run: |
           $url = "https://download.anydesk.com/AnyDesk.exe"
@@ -68,14 +74,14 @@ jobs:
       - name: Minimize Running Infrastructure Windows
         run: |
           Write-Host "Sending active command prompt windows to the taskbar tray..."
-          # Restored your original working shell automation layout
           $shell = New-Object -ComObject Shell.Application
           $shell.MinimizeAll()
 
-      - name: Optimize Resolution for Mobile Display
+      - name: Optimize Resolution for Mobile Display (Taller Aspect Ratio)
         run: |
-          Write-Host "Forcing resolution calibration matrix..."
-          Set-DisplayResolution -Width 1280 -Height 720 -Force -ErrorAction SilentlyContinue
+          Write-Host "Forcing taller resolution matrix for easier scrolling..."
+          # Adjusted height from 720 to 960 to provide extra vertical real estate
+          Set-DisplayResolution -Width 1280 -Height 960 -Force -ErrorAction SilentlyContinue
 
       - name: Download & Force Consumer Build of Opera GX
         run: |
@@ -100,7 +106,6 @@ jobs:
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX Browser.lnk")
           $Shortcut.TargetPath = $operaExe
-          # Routes directly to your link, suppresses the intro splash, and injects feature flags
           $Shortcut.Arguments = "https://www.opera.com/gx/forsaken --no-first-run --enable-features=GXRewards,GXRewardsSidebarItem --with-feature:gx-rewards=1"
           $Shortcut.Save()
 
@@ -127,7 +132,7 @@ jobs:
           $Reset = "$ESC[0m"
           
           Write-Host "${Green}====================================================${Reset}"
-          Write-Host "${Green}       ANYDESK CLOUD MACHINE IS READY TO CONNECT     ${Reset}"
+          Write-Host "${Green}        ANYDESK CLOUD MACHINE IS READY TO CONNECT     ${Reset}"
           Write-Host "${Green}====================================================${Reset}"
           Write-Host "${Yellow} CONNECTION ID : ${Red}${cleanId}${Reset}"
           Write-Host "${Yellow} PASSWORD      : ${Red}${{ env.ANYDESK_PASS }}${Reset}"
