@@ -32,25 +32,6 @@ jobs:
           $targets = @("Unity Hub.lnk", "R 4.6.0.lnk", "Firefox.lnk", "Google Chrome.lnk", "Claim Rewards Here.lnk")
           foreach ($target in $targets) { Remove-Item "$publicDesktop\$target" -Force -ErrorAction SilentlyContinue }
 
-      - name: Provision RDP User Identity & Global System Rules
-        run: |
-          Rename-Computer -NewName "pc" -Force -ErrorAction SilentlyContinue
-          
-          $u = $env:RDP_USER
-          $sec = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
-          
-          # Create user account immediately so the profile directory can be populated
-          if (-not (Get-LocalUser -Name $u -EA SilentlyContinue)) {
-            New-LocalUser -Name $u -Password $sec -AccountNeverExpires
-            Add-LocalGroupMember -Group "Administrators" -Member $u
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
-          } else {
-            Set-LocalUser -Name $u -Password $sec -AccountNeverExpires
-            Enable-LocalUser -Name $u
-          }
-          Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
-
       - name: Download & Force Consumer Build of Opera GX
         run: |
           Write-Host "Fetching consumer-stable Opera GX Core..."
@@ -58,53 +39,22 @@ jobs:
           $installer = "$env:TEMP\OperaGXSetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           
-          # Install browser silently for all users
           Start-Process -FilePath $installer -ArgumentList "--silent=1", "--allusers=1", "--launchbrowser=0", "--desktopshortcut=1" -Wait
+          
+          $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          $userDesktop = "$env:USERPROFILE\Desktop"
+          
+          if (Test-Path "$userDesktop\Opera GX.lnk") {
+              Move-Item -Path "$userDesktop\Opera GX.lnk" -Destination $publicDesktop -Force -ErrorAction SilentlyContinue
+          }
 
+          Write-Host "Configuring explicit launcher shortcut targeting Urban VPN..."
           $operaExe = "$env:ProgramFiles\Opera GX\opera.exe"
           if (-not (Test-Path $operaExe)) { $operaExe = "$env:ProgramFiles (x86)\Opera GX\opera.exe" }
-
-          # Force profile folder initialization for the 'user' directory explicitly
-          $u = $env:RDP_USER
-          $userProfileDir = "C:\Users\$u\AppData\Roaming\Opera Software\Opera GX Stable\Default"
-          if (-not (Test-Path $userProfileDir)) { New-Item -ItemType Directory -Path $userProfileDir -Force | Out-Null }
-
-          # Launch engine to populate file structures
-          Start-Process -FilePath $operaExe -ArgumentList "--no-first-run", "--user-data-dir=`"C:\Users\$u\AppData\Roaming\Opera Software\Opera GX Stable`""
           
-          $prefPath = "$userProfileDir\Preferences"
-          $backupPath = "$userProfileDir\Preferences.backup"
-          
-          for ($i = 1; $i -le 15; $i++) {
-              if (Test-Path $prefPath) { break }
-              Start-Sleep -Seconds 2
-          }
-
-          Stop-Process -Name "opera" -Force -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 5
-
-          # Modify layout preferences inside the 'user' target workspace directory
-          if (Test-Path $prefPath) {
-              $configHashtable = Get-Content $prefPath -Raw | ConvertFrom-Json -AsHashtable
-              if ($null -eq $configHashtable) { $configHashtable = @{} }
-
-              if (-not $configHashtable.ContainsKey('ui')) { $configHashtable['ui'] = @{} }
-              if (-not $configHashtable['ui'].ContainsKey('browser')) { $configHashtable['ui']['browser'] = @{} }
-              if (-not $configHashtable['ui'].ContainsKey('sidebar')) { $configHashtable['ui']['browser']['sidebar'] = @{} }
-              
-              $configHashtable['ui']['browser']['sidebar']['item_prefs'] = @{ "visibility" = @{ "GxRewards" = $true } }
-              $configHashtable['ui']['browser']['sidebar']['GxRewards'] = @{ "last_action_time" = "13426206569601273"; "notification_type" = "1" }
-              $configHashtable['ui']['visibility'] = @{ "GxRewards" = $true }
-
-              $finalJson = $configHashtable | ConvertTo-Json -Depth 100 -Compress
-              Set-Content -Path $prefPath -Value $finalJson -Force
-              Set-Content -Path $backupPath -Value $finalJson -Force
-          }
-
-          # Setup Launcher link targeting Urban VPN Google Chrome Webstore directly
-          $publicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+          # TARGET MODIFICATION: Swapped out Forsaken collab for Urban VPN Store Page + Automation Flags
           $targetUrl = "https://chromewebstore.google.com/detail/urban-vpn-proxy/eppiocemhmnlbhjplcgkofciiegomcon"
-          $stealthArgs = "`"$targetUrl`" --no-first-run --user-data-dir=`"C:\Users\$u\AppData\Roaming\Opera Software\Opera GX Stable`" --disable-blink-features=AutomationControlled --disable-infobars --password-store=basic"
+          $stealthArgs = "`"$targetUrl`" --no-first-run --disable-blink-features=AutomationControlled --disable-infobars --password-store=basic"
 
           $WshShell = New-Object -ComObject WScript.Shell
           $Shortcut = $WshShell.CreateShortcut("$publicDesktop\Opera GX Browser.lnk")
@@ -112,11 +62,7 @@ jobs:
           $Shortcut.Arguments = $stealthArgs
           $Shortcut.Save()
 
-          # Clear environment flags
-          $targetVars = @("GITHUB_ACTIONS", "GITHUB_RUN_ID", "GITHUB_REPOSITORY", "GITHUB_ACTOR", "RUNNER_NAME", "RUNNER_TRACKER")
-          foreach ($var in $targetVars) { [Environment]::SetEnvironmentVariable($var, $null, "Process") }
-
-          Start-Process -FilePath $operaExe -ArgumentList $stealthArgs
+          Start-Process -FilePath "$publicDesktop\Opera GX Browser.lnk"
 
       - name: Parse Runtime Requirements
         run: |
@@ -152,6 +98,23 @@ jobs:
           & $ts up --authkey "${{ secrets.AUTH }}" --hostname "pc" --accept-dns=true --accept-routes=true
           $ip4 = & $ts ip -4 | Select-Object -First 1
           Write-Host "Tailscale Dedicated Node IP: $ip4"
+
+      - name: Provision RDP User Identity & Global System Rules
+        run: |
+          Rename-Computer -NewName "pc" -Force -ErrorAction SilentlyContinue
+          
+          $u = $env:RDP_USER
+          $sec = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
+          if (-not (Get-LocalUser -Name $u -EA SilentlyContinue)) {
+            New-LocalUser -Name $u -Password $sec -AccountNeverExpires
+            Add-LocalGroupMember -Group "Administrators" -Member $u
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
+          } else {
+            Set-LocalUser -Name $u -Password $sec -AccountNeverExpires
+            Enable-LocalUser -Name $u
+          }
+          Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
 
       - name: Structural Window Minimization
         run: |
